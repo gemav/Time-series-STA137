@@ -9,7 +9,7 @@ Loading packages
 ```{r}
 library("astsa")
 library("forecast")
-
+library("nlme")
 ```
 
 
@@ -36,17 +36,17 @@ colnames(df) <- c("month", "crimes")
 
 
 1. Use graphical techniques to inspect the data. Describe the behaviour of the data. Mention any features you think may be important for analysis and forecasting.
-
-```{r, eval=T}
-ts.plot(df$crimes, xlab = "Year-month", ylab = "Number of Armed Robberies", gpars=list(xaxt="n"))
+```{r}
+par(mfrow = c(1,1))
+ts.plot(df$crimes, xlab = "Year-month", ylab = "Number of Armed Robberies", gpars=list(xaxt="n"), main = "Number of Armed Robberies over Time in Boston")
 axis(side=1, at=seq(1:118), label=df$month)
 ```
 Fig 1. Monthly number of armed roberies in Boston (Jan 1966 - Oct 1975) 
 
 Variance seems to be unequal. During the initial observations, points are closer together compared with how later in time it tends to spread out.
-Data also shows increasing trend over time since the number of maximum and minimum number of armed robberies increase over time.
+Data also shows increasing trend over time since the number of maximum and minimum number of armed robberies increases over time.
 The presence of seasonality is not very clear from the plot.
-In summary the data is not stationary as it is clear from the plot that both mean and variance are not constant, being instead a function of time.
+In summary, the data is not stationary as it is clear from the plot that both mean and variance are not constant, being instead a function of time.
 
 
 
@@ -57,7 +57,6 @@ Use transformations and/or differencing to make the series stationary. Include a
 
 Transforming data using Box Cox transformation and other methods to make the variance constant.
 ```{r}
-
 lambda <- BoxCox.lambda(df$crimes)
 robs_boxcox <- df$crimes^lambda
 robs_sqrt = round(sqrt(df$crimes), 2)
@@ -67,37 +66,44 @@ robs_subs = (df$crimes)^(-1)
 
 df_trans = data.frame(robs_sqrt, robs_log, robs_third, robs_subs, robs_boxcox)
 
-# use tada's code that includes the titles of the plots.Check code discussion 9 for main text
+# use tada's code that includes the titles of the plots.
 par(mfrow = c(2,3))
 for (d in df_trans) {
 ts.plot(d, xlab = "Year-month", ylab = "Transformed number of Armed Robberies", gpars=list(xaxt="n"))
 axis(side=1, at=seq(1:118), label=df$month)
 }
-
 ```
-Fig 2. Transofmrations of the monthly number of armed roberies in Boston (Jan 1966 - Oct 1975) 
+Fig 2. Transformations of the monthly number of armed roberies in Boston (Jan 1966 - Oct 1975) 
 
 So we'll stick with the Box-Cox transform to stabilize the variance
 
-The ACF plot shows a trend, no surprise based on the plot of the raw data.
-The PACF plot shows an exponential decay, with change of sign, indicating that this, perhaps, is a MA(p) process, although we need to detrend first.
+
 ```{r}
 par(mfrow = c(1,2))
 Acf(robs_boxcox); Pacf(robs_boxcox)
 ```
 Figure 3. ACF and PACF of transformed data
 
-Removing the trend by differencing. Based on the results of ndiffs(), one difference should do. Figure 4 shows the transformed differenced data looks roughly stationary.
+The ACF plot shows a trend, no surprise based on the plot of the raw data.
+The PACF plot shows an exponential decay, with change of sign, indicating that this, perhaps, is a MA(p) process, although we need to detrend first.
+
+
+
+Removing the trend by differencing. Based on the results of ndiffs(), one difference should do.
 ```{r}
 ndiffs(robs_boxcox)
 
 detrend = diff(robs_boxcox, lag = 1, differences = 1)
 ndiffs(detrend)
 
-ts.plot(detrend, xlab = "Year-month", ylab = " Number of Armed Robberies", gpars=list(xaxt="n"))
+
+par(mfrow = c(1,1))
+ts.plot(detrend, xlab = "Year-month", ylab = " Number of Armed Robberies", gpars=list(xaxt="n"), main = "Detrended Number of Armed Robberies in Boston")
 axis(side=1, at=seq(1:118), label=df$month)
 ```
 Figure 4. Detrended Number of Monthly Armed Robberies in Boston
+
+Figure 4 shows the transformed differenced data looks roughly stationary.
 
 
 Is the data seasonal? Estimating the number of needed seasonal differences
@@ -110,99 +116,77 @@ Gives an error because the data is non seasonal. We don't need to remove seasona
 3. Using the tranformed and/or differenced data from the previous part, obtain the sample ACF and PACF plots, as well as plots of the raw periodogram, and its smoothed version. Comment on the plots. Use the plots to make a preliminary guess for an appropriate ARIMA model. Keep in mind that differencing plays a part in determining whether the model should be ARMA or ARIMA.
 
 
-The ACF and PACF plot of the detreneded data look better, we got rid of the trend. Since both ACF and PACF seem to decay exponentially for the differenced series, with a large ACF and PACF at lag 1, perhaps this is an ARIMA(1,1,1) process.
-The raw and smoothed periodograms seem to have their largest values at frequencies just below 4.0. The scaled periodogram have its largest values of 0.014, 0.008, and 0.007 at frequencies 0.359, 0.256, and 0.350, respectively. Of these the most salient is the first one, with a value about twice as much as the one of the next 2. Based on the periodogram, where only one value seems to dominate, the balance seems to incline also for the ARIMA(1,1,1) model(?).
+The ACF and PACF plot of the detreneded data look better, we got rid of the trend.Since both ACF and PACF seem to decay exponentially for the differenced series, perhaps this is an ARIMA(p,1,q) process.
+The raw and scaled periodograms have their maximum at frequency 0.359
 
 ```{r}
 P <- 4*abs(fft(detrend)/length(detrend))^2
-            #Scaled periodogram^
+# |---------- Scaled Periodogram -----------|
+
 Fr <- 0:(length(detrend)-1)/length(detrend)
 
 par(mfrow = c(2,2))
 Acf(detrend, lag.max = 30); Pacf(detrend, lag.max = 30)
-spec.pgram(detrend); spec.pgram(detrend, spans = 5)
-# Raw periodogram^    Smoothed periodogram^
-plot(Fr, P, type="o", xlab="frequency", ylab="periodogram")
-# Scaled periodogram^
-Fr[order(P[1:((length(P)-1)/2)], decreasing = T)[1:3]]
-      # Freq of 3 largest periodograms^
+spec.pgram(detrend); plot(Fr, P, type="o", xlab="frequency", ylab="periodogram")
+
+Fr[which.max(P)]
+      # ^ Freq of max periodogram
 
 ```
-Figure 5. ACF and PACF of detrended data
+Figure 5. ACF and PACF of transformed and detrended data
 
 
 
-4. Fit the model form the previous step. Include the model, and the parameter estimates. Plot the fitted values and the observed values on the same plot.
-<<<<<<< HEAD
-```{r, eval=FALSE}
-=======
+
+
+
+
+RAW PERIODOGRAM AND SMOOTHERED PERIODOGRAM
+```{r}
+# raw
+par(mfrow = c(1,1))
+spec.pgram(detrend)
+
+# smoothered (see discussion 9)
+spans = c(3, 5, 9, 13, 17, 25, 31)
+
+
+par(mfrow = c(3,3))
+spec.pgram(detrend)
+for(k in spans){
+spec.pgram(detrend, spans=k, main=paste0('Span ', k))
+}
+```
+Make preliminary guess of appropriate ARIMA / ARMA model would be.
+
+
+
+
+4. Fit the model from the previous step. Include the model, and the parameter estimates. Plot the fitted values and the observed values on the same plot.
 ```{r}
 # how to know what model to fit? Looking at ACF and PACF? See discussion 7
 # DO NOT USE AUTO.ARIMA() HERE SINCE HE ASKS FOR IT LATER, AND SPECIFIES ARGUMENTS
->>>>>>> origin/Tada's-implementation
 
 fit_1 = Arima(robs_boxcox, order = c(1, 1, 1))
 fit_1
 ```
-Parameter estimates: phi = 0.4126; theta = -0.7109. Figure 6 shows the observed and fitted values for this model
+Parameter estimates:
 
+
+PLOT FITTED VALUES AND OBSERVED VALUES ON SAME PLOT.
 ```{r}
-ts.plot(df$crimes, xlab = "Year-month", ylab = "Number of Armed Robberies", gpars=list(xaxt="n"))
-axis(side=1, at=seq(1:118), label=df$month)
-points(x = 1:118, fit_1$fitted^(1/lambda), col = 'slateblue', type = 'l')
-
+plot(df$V2, type = "l")
+points(x = 1:117, fit_1$fitted, col = 'darkblue', type = 'l')
+# IS NOT WORKING, I DON'T KNOW WHY, FITTED POINTS ARE NOT BEING PLOTTED
 ```
-Figure 6. Observed (black line) and fitted (blue line) values for thr ARIMA (1,1,1) model of Boston's monthly armed robberies' frequency
+
 
 
 
 5. Examine the residuals. Provide necessary plots and/or hypothesis test results. Do the residuals resemble Gaussian white noise?
-<<<<<<< HEAD
-
-Based on the plot of residuals vs time, the ACF, PACF, Ljung-Box test, and on the histogram and normal Q-Q plot, the residuals look like Gaussian white noise.
-```{r, eval=FALSE}
-=======
 ```{r}
->>>>>>> origin/Tada's-implementation
 # residuals
 res = fit_1$residuals
-
-# sample ACF and PACF
-par(mfrow = c(2,2))
-ts.plot(res)
-Acf(res, lag=30)
-Pacf(res, lag=30)
-
-```
-Figure 7. Time plot, ACF, and PACF of residuals
-
-```{r}
-# histogram and normal QQ-plot
-par(mfrow = c(1,2))
-hist(res)
-qqnorm(res)
-qqline(res)
-```
-Figure 8. Histogram and normal Q-Q plot of residuals
-
-```{r}
-# Box-Ljung test (H_0: independence of observations in time series(stationarity)
-Box.test(res, lag=10, type="Ljung")
-```
-
-
-6. Use AICc to select an ARIMA model for the (possible transformed) data. Keep in mind that differencing should be incorporated into the model. It is fine to use the function auto.arima() here. It is enough to consider p = 0, ..., 8, q = 0, ...,8, and d = 0, 1, 2. Include the chose model, and provide parameter estimates and their standard errors.
-```{r}
-fit_2 = auto.arima(robs_log, max.p = 8, max.q = 8, max.P = 2, max.Q = 2, max.d = 2, max.D = 1)
-fit_2
-```
-
-
-
-7. Inspect the residuals of this model. Provide necessary plots and/or hypothesis test results. Do the residuals resemble Gaussian white noise?
-```{r}
-# residuals
-res = fit_2$residuals
 res
 ts.plot(res)
 
@@ -223,53 +207,89 @@ qqline(res)
 
 
 
+6. Use AICc to select an ARIMA model for the (possible transformed) data. Keep in mind that differencing should be incorporated into the model. It is fine to use the function auto.arima() here. It is enough to consider p = 0, ..., 8, q = 0, ...,8, and d = 0, 1, 2. Include the chose model, and provide parameter estimates and their standard errors.
+```{r}
+# with lambda = NULL
+fit_2 = auto.arima(robs_boxcox, max.p = 8, max.q = 8, max.P = 2, max.Q = 2, max.d = 2, max.D = 1, ic = "aicc", trace = TRUE)
+fit_2
+```
+The best model is an ARIMA(0,1,2) with drift with AICc = 0.37, where the estimated parameters are:
+theta_1: -0.3630 (s.e.: 0.0952)
+theta_2: -0.3114 (s.e.: 0.1199)
+drift (mu): 0.0245 (s.e.: 0.0072)
+
+
+
+
+
+7. Inspect the residuals of this model. Provide necessary plots and/or hypothesis test results. Do the residuals resemble Gaussian white noise?
+```{r}
+# residuals
+par(mfrow = c(1,1))
+res = fit_2$residuals
+res
+ts.plot(res, main = "Residuals of the fitted ARIMA(0,1,2) model", ylab = "residuals")
+
+# sample ACF and PACF
+par(mfrow = c(1,1))
+Acf(res, lag.max = 30)
+Pacf(res, lag.max = 30)
+
+# Box-Ljung test (H_0: independence of observations in time series)
+Box.test(res, lag=10, type="Ljung")
+
+# histogram and normal QQ-plot
+par(mfrow = c(1,1))
+hist(res)
+qqnorm(res)
+qqline(res)
+```
+The plot of the residuals doesn't show any particular pattern. Also, the ACF and PACF plots show that 95% of the values are inside the 95% CI, indicating that the residuals resemble Gaussian white noise. 
+This is supported by the Ljung-Box test, which null hypothesis is that the observations in a time series process are independent. Our residuals, after fitting an ARIMA(0,1,2) model, has a p-value of 0.1512 and therefore, we cannot reject the null with a significance level of 0.05.
+
+Furthermore, the histogram and normal plots show that the residuals of our fitted model have a Gaussian white noise distribution.
+
+
+Our final best model is ARIMA(0,1,2) since its AICc is lower (0.37) compared with ARIMA(1,1,1)'s AICc (4.45). Therefore, we are going to use this model in the remainding parts of this project.
+
+
 8. Plot the (theoretical) spectral density of the final model together with the smoothed periodogram. Comment on the plots. Describe the method you chose for smoothing the periodogram.
-<<<<<<< HEAD
-```{r, eval=FALSE}
-# Using simulate from forecast package. fit_kk is place-holder for auto.rima ourput
-x1 <- simulate(fit_kk, seed=1, future=F)
-# Using auto.arima. No place for the drift here (it shouldn't matter though(?))
-set.seed(1)
-x2 <- arima.sim(n=118, model=list(ma=c(-0.3630, -0.3114), order=c(0,1,2)))
-
-# Differencing simulated data
-x2.diff <- diff(x2, lag = 1, differences = 1)
-ndiffs(x2.diff)
-
-# Spectral density
-P.x <- 4*abs(fft(x2.diff)/length(x2.diff))^2
-            #Scaled periodogram^
-Fr.x <- 0:(length(x2.diff)-1)/length(x2.diff)
-# Plotting
-par(mfrow=c(2,2))
-spec.pgram(x2.diff); spec.pgram(x2.diff, spans = 5)
-# Raw periodogram^    Smoothed periodogram^
-plot(Fr.x, P.x, type="o", xlab="frequency", ylab="periodogram")
-# Dominating frequencies
-Fr.x[order(P.x[1:((length(P.x)-1)/2)], decreasing = T)[1:3]]
-=======
 ```{r}
 
->>>>>>> origin/Tada's-implementation
 ```
-Figure 11. Raw, smoothed, and scaled periodograms of a simulated ARIMA(0,1,2) time series
+
 
 
 9. Now remove the data for 1975 (the last 10 observations). Using only data from 1966 - 1975 (the first 108 observations) fit an ARIMA model using AICc. Again it is fine to use auto.arima(). Then do the following.
 ```{r}
-dim(df)
+length(robs_boxcox)
 
-# taking the first 158 observations.
-subset_robs = df[1:108, ]
-subset_fsc = df[109:nrow(df), ]
+# taking the first 108 observations of the transformed data.
+subset_robs = robs_boxcox[1:108]
+subset_fsc = robs_boxcox[109:length(robs_boxcox)]
+
+# taking the first 108 observations of the original data.
+subs_robs_original = df[1:108, ]
+subs_fsc_original = df[109:nrow(df), ]
 ```
 
 
 a. Write down the chosen model. Include parameter estimates
 ```{r}
-fit_3 = auto.arima()
+# for the transformed subset data
+fit_3 = auto.arima(subset_robs, max.p = 8, max.q = 8, max.d = 2, ic = "aicc", trace = TRUE)
+fit_3
 
+
+# for the original subset data (before transformation)
+#fit_3_original = auto.arima(subs_robs_original[,2], max.p = 8, max.q = 8, max.d = 2, ic = "aicc", trace = TRUE)
+#fit_3_original
 ```
+The best model based on the first 108 observations, is an ARIMA(0,1,2) with drift and with AICc = 1.05, where the parameters are:
+theta_1: -0.3818 (s.e.: 0.0970)
+theta_2: -0.2852 (s.e.: 0.1141)
+drift (mu): 0.0265 (s.e.: 0.0077)
+
 
 
 b. Inspect the residuals of this model. Do they resemble Gaussian white noise?
@@ -277,49 +297,66 @@ b. Inspect the residuals of this model. Do they resemble Gaussian white noise?
 # residuals
 res = fit_3$residuals
 res
-ts.plot(res)
+ts.plot(res, main = "Residuals of the fitted ARIMA(0,1,2) model for the first 108 observations", ylab = "residuals")
 
 # sample ACF and PACF
-par(mfrow = c(2,1))
-Acf(res)
-Pacf(res)
+par(mfrow = c(1,1))
+Acf(res, lag.max = 30)
+Pacf(res, lag.max = 30)
 
 # Box-Ljung test
-Box.test(res, lag=10, type="Ljung") # p-value: 0.5725
+Box.test(res, lag=10, type="Ljung") # p-value: 0.5295
 
 # histogram and normal QQ-plot
-par(mfrow = c(2,1))
+par(mfrow = c(1,1))
 hist(res)
 qqnorm(res)
 qqline(res)
 ```
+The plot of the residuals doesn't show any particular pattern. Also, the ACF and PACF plots show that all the values at different lags are inside the 95% CI, indicating that the residuals resemble Gaussian white noise.
+
+This is supported by the Ljung-Box test, which null hypothesis is that the observations in a time series process are independent. Our residuals, after fitting an ARIMA(0,1,2) model considering only the first 108 observations, has a p-value of 0.5295 and therefore, we cannot reject the null with a significance level of 0.05.
+
+Furthermore, the histogram and normal plots show that the residuals of our fitted model have a Gaussian white noise distribution.
 
 
-c. Compute point forecasts of the values for January through October 1975. If you used a transformation, then be sure to compute forecasts of the original data, not the transmformed data.
+
+
+c. Compute point forecasts of the values for January through October 1975. If you used a transformation, then be sure to compute forecasts of the original data, not the transformed data.
 ```{r}
-fst = predict(fit_3, n.ahead = 10)
-fst$pred
+fst = forecast(fit_3, h = 10, level = 95)
+fst
+
+points_fst = fst$mean^(1/lambda); points_fst
+lower = fst$lower^(1/lambda); lower
+upper = fst$upper^(1/lambda); upper
 ```
+With the function forecast(), we computed the point forecasts with their respective upper and lower bouds for the 95% CI. After that, the estimated point forecasts and their upper and lower bounds are transformed back the original scale.
 
 
-d.Make a time plot of the entire data set, the point forecasts, and 95% prediction intervals. Make another plot of just the observed values from 1975 along with the point forecasts and the prediction intervals. Commnent on the forecast performance.
+
+d. Make a time plot of the entire data set, the point forecasts, and 95% prediction intervals. Make another plot of just the observed values from 1975 along with the point forecasts and the prediction intervals. Comment on the forecast performance.
+
+
+Plot of entire data set, point forecasts and 95% prediction intervals
 ```{r}
-# CONFIRM THIS CODE
-n = 158
-h = 5
+n = 108
+h = 10
 
 par(mfrow = c(1,1))
-ts.plot(temp[,2])
+ts.plot(df$crimes, ylab = "number of crimes", main = "blala")
 polygon(x = c(n+(1:h), n+(h:1)), y = c(upper, lower[h:1]), col = 'lightblue', border = NA)
-points(x = n+1:h, y = fst$pred, col = 'purple', type = 'b', pch = 19)
-
-# zoom in
-ts.plot(subset_fsc[,2], ylim = c(0.30, 0.48))
-points(seq(1,5), fst$pred, col = 'purple', type = 'b', pch = 19)
-
-upper = fst$pred + fst$se
-lower = fst$pred - fst$se
-
-polygon(x = c(seq(1,5), seq(5,1)), y = c(upper, lower[h:1]), col = 'lightblue', border = NA)
+points(x = n+1:h, y = points_fst, col = 'purple', type = 'b', pch = 19)
+points(x = n+1:h, y = subs_fsc_original$crimes, col = 'black', type = 'l')
 ```
+
+
+Plot of just the observed values from 1975, point forecasts and prediction intervals.
+```{r}
+ts.plot(subs_fsc_original$crimes, ylab = "Number of Robberies",main = "Number of Armed Robberies from January 1975 to October 1975 \nin Boston", ylim = c(250, 700))
+polygon(x = c(seq(1,10), seq(10,1)), y = c(upper, lower[h:1]), col = 'lightblue', border = NA)
+points(seq(1,10), points_fst, col = 'purple', type = 'b', pch = 19)
+points(seq(1,10), y = subs_fsc_original$crimes, col = 'black', type = 'l')
+```
+COMMENT ON THE FORECAST PERFORMANCE:
 
