@@ -23,6 +23,8 @@ setwd("/Users/gemavidal/Box Sync/Vet/MPVM & PhD/PhD 2016_2017 Winter Quarter (gv
 
 # from Tada's PC
 setwd("C:/Users/tyatabe/OneDrive/Docs/PhD Epi/Winter_17/Time series/Project2/Trial")
+# From Tada's laptop
+setwd("C:/Users/Tadaishi/SkyDrive//Docs/PhD Epi/Winter_17/Time series/Project2/Trial")
 
 df <- read.table("bostonArmedRobberies.txt", header = FALSE)
 head(df)
@@ -54,7 +56,7 @@ Use transformations and/or differencing to make the series stationary. Include a
 
 Transforming data using Box Cox transformation and other methods to make the variance constant.
 ```{r, eval=FALSE}
-library(forecast)
+
 lambda <- BoxCox.lambda(df$crimes)
 robs_boxcox <- df$crimes^lambda
 robs_sqrt = round(sqrt(df$crimes), 2)
@@ -77,7 +79,7 @@ Fig 2. Transofmrations of the monthly number of armed roberies in Boston (Jan 19
 So we'll stick with the Box-Cox transform to stabilize the variance
 
 The ACF plot shows a trend, no surprise based on the plot of the raw data.
-The PACF plot shows an exponential decay, with change of sign, indicating that this perhaps is a MA(p) process, although we need to detrend first.
+The PACF plot shows an exponential decay, with change of sign, indicating that this, perhaps, is a MA(p) process, although we need to detrend first.
 ```{r}
 par(mfrow = c(1,2))
 Acf(robs_boxcox); Pacf(robs_boxcox)
@@ -85,10 +87,9 @@ Acf(robs_boxcox); Pacf(robs_boxcox)
 ```
 Figure 3. ACF and PACF of transformed data
 
-Removing the trend by differencing. Based on the results of ndiffs(), one difference should do
+Removing the trend by differencing. Based on the results of ndiffs(), one difference should do. Figure 4 shows the transformed differenced data looks roughly stationary.
 ```{r}
 
-library(forecast)
 ndiffs(robs_boxcox)
 
 detrend = diff(robs_boxcox, lag = 1, differences = 1)
@@ -111,11 +112,21 @@ Gives an error because the data is non seasonal. We don't need to remove seasona
 3. Using the tranformed and/or differenced data from the previous part, obtain the sample ACF and PACF plots, as well as plots of the raw periodogram, and its smoothed version. Comment on the plots. Use the plots to make a preliminary guess for an appropriate ARIMA model. Keep in mind that differencing plays a part in determining whether the model should be ARMA or ARIMA.
 
 
-The ACF and PACF plot of the detreneded data look better, we got rid of the trend.Since both ACF and PACF seem to decay exponentially for the differenced series, perhaps this is an ARIMA(p,1,q) process
+The ACF and PACF plot of the detreneded data look better, we got rid of the trend.Since both ACF and PACF seem to decay exponentially for the differenced series, perhaps this is an ARIMA(p,1,q) process.
+The raw and scaled periodograms have their maximum at frequency 0.359
 
 ```{r}
-par(mfrow = c(1,2))
-Acf(diff(robs_boxcox), lag.max = 30); Pacf(diff(robs_boxcox), lag.max = 30)
+P <- 4*abs(fft(detrend)/length(detrend))^2
+            #Scaled periodogram^
+Fr <- 0:(length(detrend)-1)/length(detrend)
+
+par(mfrow = c(2,2))
+Acf(detrend, lag.max = 30); Pacf(detrend, lag.max = 30)
+spec.pgram(detrend); plot(Fr, P, type="o", xlab="frequency", ylab="periodogram")
+
+Fr[which.max(P)]
+      # ^ Freq of max periodogram
+
 ```
 Figure 5. ACF and PACF of detrended data
 
