@@ -9,7 +9,7 @@ Loading packages
 ```{r, eval=FALSE}
 library("astsa")
 library("forecast")
-library("nlme")
+
 ```
 
 
@@ -36,7 +36,7 @@ colnames(df) <- c("month", "crimes")
 
 
 1. Use graphical techniques to inspect the data. Describe the behaviour of the data. Mention any features you think may be important for analysis and forecasting.
-```{r, eval=FALSE}
+```{r, eval=T}
 ts.plot(df$crimes, xlab = "Year-month", ylab = "Number of Armed Robberies", gpars=list(xaxt="n"))
 axis(side=1, at=seq(1:118), label=df$month)
 ```
@@ -66,7 +66,7 @@ robs_subs = (df$crimes)^(-1)
 
 df_trans = data.frame(robs_sqrt, robs_log, robs_third, robs_subs, robs_boxcox)
 
-# use tada's code that includes the titles of the plots.
+# use tada's code that includes the titles of the plots.Check code discussion 9 for main text
 par(mfrow = c(2,3))
 for (d in df_trans) {
 ts.plot(d, xlab = "Year-month", ylab = "Transformed number of Armed Robberies", gpars=list(xaxt="n"))
@@ -112,8 +112,8 @@ Gives an error because the data is non seasonal. We don't need to remove seasona
 3. Using the tranformed and/or differenced data from the previous part, obtain the sample ACF and PACF plots, as well as plots of the raw periodogram, and its smoothed version. Comment on the plots. Use the plots to make a preliminary guess for an appropriate ARIMA model. Keep in mind that differencing plays a part in determining whether the model should be ARMA or ARIMA.
 
 
-The ACF and PACF plot of the detreneded data look better, we got rid of the trend.Since both ACF and PACF seem to decay exponentially for the differenced series, perhaps this is an ARIMA(p,1,q) process.
-The raw and scaled periodograms have their maximum at frequency 0.359
+The ACF and PACF plot of the detreneded data look better, we got rid of the trend. Since both ACF and PACF seem to decay exponentially for the differenced series, , with a large ACF and PACF at lag 1, perhaps this is an ARIMA(1,1,1) process.
+The raw and smoothed periodograms seem to have their largest values at frequencies just below 4.0. The scaled periodogram have its largest values of 0.014, 0.008, and 0.007 at frequencies 0.359, 0.256, and 0.350, respectively. Of these the most salient is the first one, with a value about twice as much as the one of the next 2. Based on the periodogram, where only one value seems to dominate, the balance seems to incline also for the ARIMA(1,1,1) model.
 
 ```{r}
 P <- 4*abs(fft(detrend)/length(detrend))^2
@@ -122,38 +122,15 @@ Fr <- 0:(length(detrend)-1)/length(detrend)
 
 par(mfrow = c(2,2))
 Acf(detrend, lag.max = 30); Pacf(detrend, lag.max = 30)
-spec.pgram(detrend); plot(Fr, P, type="o", xlab="frequency", ylab="periodogram")
-
-Fr[which.max(P)]
-      # ^ Freq of max periodogram
+spec.pgram(detrend); spec.pgram(detrend, spans = 5)
+# Raw periodogram^    Smoothed periodogram^
+plot(Fr, P, type="o", xlab="frequency", ylab="periodogram")
+# Scaled periodogram^
+Fr[order(P[1:((length(P)-1)/2)], decreasing = T)[1:3]]
+      # Freq of 3 largest periodograms^
 
 ```
 Figure 5. ACF and PACF of detrended data
-
-
-
-
-
-
-
-RAW PERIODOGRAM AND SMOOTHERED PERIODOGRAM
-```{r}
-# raw
-par(mfrow = c(1,1))
-spec.pgram(detrend)
-
-# smoothered (see discussion 9)
-spans = c(3, 5, 9, 13, 17, 25, 31)
-
-
-par(mfrow = c(3,3))
-spec.pgram(detrend)
-for(k in spans){
-spec.pgram(detrend, spans=k, main=paste0('Span ', k))
-}
-```
-Make preliminary guess of appropriate ARIMA / ARMA model would be.
-
 
 
 
