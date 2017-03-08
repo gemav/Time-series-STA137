@@ -110,8 +110,8 @@ Gives an error because the data is non seasonal. We don't need to remove seasona
 3. Using the tranformed and/or differenced data from the previous part, obtain the sample ACF and PACF plots, as well as plots of the raw periodogram, and its smoothed version. Comment on the plots. Use the plots to make a preliminary guess for an appropriate ARIMA model. Keep in mind that differencing plays a part in determining whether the model should be ARMA or ARIMA.
 
 
-The ACF and PACF plot of the detreneded data look better, we got rid of the trend. Since both ACF and PACF seem to decay exponentially for the differenced series, , with a large ACF and PACF at lag 1, perhaps this is an ARIMA(1,1,1) process.
-The raw and smoothed periodograms seem to have their largest values at frequencies just below 4.0. The scaled periodogram have its largest values of 0.014, 0.008, and 0.007 at frequencies 0.359, 0.256, and 0.350, respectively. Of these the most salient is the first one, with a value about twice as much as the one of the next 2. Based on the periodogram, where only one value seems to dominate, the balance seems to incline also for the ARIMA(1,1,1) model.
+The ACF and PACF plot of the detreneded data look better, we got rid of the trend. Since both ACF and PACF seem to decay exponentially for the differenced series, with a large ACF and PACF at lag 1, perhaps this is an ARIMA(1,1,1) process.
+The raw and smoothed periodograms seem to have their largest values at frequencies just below 4.0. The scaled periodogram have its largest values of 0.014, 0.008, and 0.007 at frequencies 0.359, 0.256, and 0.350, respectively. Of these the most salient is the first one, with a value about twice as much as the one of the next 2. Based on the periodogram, where only one value seems to dominate, the balance seems to incline also for the ARIMA(1,1,1) model(?).
 
 ```{r}
 P <- 4*abs(fft(detrend)/length(detrend))^2
@@ -133,48 +133,62 @@ Figure 5. ACF and PACF of detrended data
 
 
 4. Fit the model form the previous step. Include the model, and the parameter estimates. Plot the fitted values and the observed values on the same plot.
+<<<<<<< HEAD
+```{r, eval=FALSE}
+=======
 ```{r}
 # how to know what model to fit? Looking at ACF and PACF? See discussion 7
 # DO NOT USE AUTO.ARIMA() HERE SINCE HE ASKS FOR IT LATER, AND SPECIFIES ARGUMENTS
+>>>>>>> origin/Tada's-implementation
 
-fit_1 = Arima(robs_log, order = c(1, 1, 1))
+fit_1 = Arima(robs_boxcox, order = c(1, 1, 1))
 fit_1
 ```
-Parameter estimates:
+Parameter estimates: phi = 0.4126; theta = -0.7109. Figure 6 shows the observed and fitted values for this model
 
-
-PLOT FITTED VALUES AND OBSERVED VALUES ON SAME PLOT.
 ```{r}
-plot(df$V2, type = "l")
-points(x = 1:117, fit_1$fitted, col = 'darkblue', type = 'l')
-# IS NOT WORKING, I DON'T KNOW WHY, FITTED POINTS ARE NOT BEING PLOTTED
-```
+ts.plot(df$crimes, xlab = "Year-month", ylab = "Number of Armed Robberies", gpars=list(xaxt="n"))
+axis(side=1, at=seq(1:118), label=df$month)
+points(x = 1:118, fit_1$fitted^(1/lambda), col = 'slateblue', type = 'l')
 
+```
+Figure 6. Observed (black line) and fitted (blue line) values for thr ARIMA (1,1,1) model of Boston's monthly armed robberies' frequency
 
 
 
 5. Examine the residuals. Provide necessary plots and/or hypothesis test results. Do the residuals resemble Gaussian white noise?
+<<<<<<< HEAD
+
+Based on the plot of residuals vs time, the ACF, PACF, Ljung-Box test, and on the histogram and normal Q-Q plot, the residuals look like Gaussian white noise.
+```{r, eval=FALSE}
+=======
 ```{r}
+>>>>>>> origin/Tada's-implementation
 # residuals
 res = fit_1$residuals
-res
-ts.plot(res)
 
 # sample ACF and PACF
-par(mfrow = c(2,1))
-Acf(res)
-Pacf(res)
+par(mfrow = c(2,2))
+ts.plot(res)
+Acf(res, lag=30)
+Pacf(res, lag=30)
 
-# Box-Ljung test (H_0: independence of observations in time series)
-Box.test(res, lag=10, type="Ljung")
+```
+Figure 7. Time plot, ACF, and PACF of residuals
 
+```{r}
 # histogram and normal QQ-plot
-par(mfrow = c(2,1))
+par(mfrow = c(1,2))
 hist(res)
 qqnorm(res)
 qqline(res)
 ```
+Figure 8. Histogram and normal Q-Q plot of residuals
 
+```{r}
+# Box-Ljung test (H_0: independence of observations in time series(stationarity)
+Box.test(res, lag=10, type="Ljung")
+```
 
 
 6. Use AICc to select an ARIMA model for the (possible transformed) data. Keep in mind that differencing should be incorporated into the model. It is fine to use the function auto.arima() here. It is enough to consider p = 0, ..., 8, q = 0, ...,8, and d = 0, 1, 2. Include the chose model, and provide parameter estimates and their standard errors.
@@ -210,10 +224,35 @@ qqline(res)
 
 
 8. Plot the (theoretical) spectral density of the final model together with the smoothed periodogram. Comment on the plots. Describe the method you chose for smoothing the periodogram.
+<<<<<<< HEAD
+```{r, eval=FALSE}
+# Using simulate from forecast package. fit_kk is place-holder for auto.rima ourput
+x1 <- simulate(fit_kk, seed=1, future=F)
+# Using auto.arima. No place for the drift here (it shouldn't matter though(?))
+set.seed(1)
+x2 <- arima.sim(n=118, model=list(ma=c(-0.3630, -0.3114), order=c(0,1,2)))
+
+# Differencing simulated data
+x2.diff <- diff(x2, lag = 1, differences = 1)
+ndiffs(x2.diff)
+
+# Spectral density
+P.x <- 4*abs(fft(x2.diff)/length(x2.diff))^2
+            #Scaled periodogram^
+Fr.x <- 0:(length(x2.diff)-1)/length(x2.diff)
+# Plotting
+par(mfrow=c(2,2))
+spec.pgram(x2.diff); spec.pgram(x2.diff, spans = 5)
+# Raw periodogram^    Smoothed periodogram^
+plot(Fr.x, P.x, type="o", xlab="frequency", ylab="periodogram")
+# Dominating frequencies
+Fr.x[order(P.x[1:((length(P.x)-1)/2)], decreasing = T)[1:3]]
+=======
 ```{r}
 
+>>>>>>> origin/Tada's-implementation
 ```
-
+Figure 11. Raw, smoothed, and scaled periodograms of a simulated ARIMA(0,1,2) time series
 
 
 9. Now remove the data for 1975 (the last 10 observations). Using only data from 1966 - 1975 (the first 108 observations) fit an ARIMA model using AICc. Again it is fine to use auto.arima(). Then do the following.
