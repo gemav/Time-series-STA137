@@ -6,7 +6,7 @@ output: word_document
 ---
 
 Loading packages
-```{r, eval=FALSE}
+```{r}
 library("astsa")
 library("forecast")
 
@@ -14,7 +14,7 @@ library("forecast")
 
 
 Setting working directory
-```{r, eval=FALSE}
+```{r, eval = FALSE}
 # from Gema's PC
 setwd("/Users/gvidal/Box Sync/Vet/MPVM & PhD/PhD 2016_2017 Winter Quarter (gvidal@ucdavis.edu)/STA 137/Project")
 
@@ -36,6 +36,7 @@ colnames(df) <- c("month", "crimes")
 
 
 1. Use graphical techniques to inspect the data. Describe the behaviour of the data. Mention any features you think may be important for analysis and forecasting.
+
 ```{r, eval=T}
 ts.plot(df$crimes, xlab = "Year-month", ylab = "Number of Armed Robberies", gpars=list(xaxt="n"))
 axis(side=1, at=seq(1:118), label=df$month)
@@ -55,7 +56,7 @@ Use transformations and/or differencing to make the series stationary. Include a
 
 
 Transforming data using Box Cox transformation and other methods to make the variance constant.
-```{r, eval=FALSE}
+```{r}
 
 lambda <- BoxCox.lambda(df$crimes)
 robs_boxcox <- df$crimes^lambda
@@ -83,13 +84,11 @@ The PACF plot shows an exponential decay, with change of sign, indicating that t
 ```{r}
 par(mfrow = c(1,2))
 Acf(robs_boxcox); Pacf(robs_boxcox)
-
 ```
 Figure 3. ACF and PACF of transformed data
 
 Removing the trend by differencing. Based on the results of ndiffs(), one difference should do. Figure 4 shows the transformed differenced data looks roughly stationary.
 ```{r}
-
 ndiffs(robs_boxcox)
 
 detrend = diff(robs_boxcox, lag = 1, differences = 1)
@@ -97,7 +96,6 @@ ndiffs(detrend)
 
 ts.plot(detrend, xlab = "Year-month", ylab = " Number of Armed Robberies", gpars=list(xaxt="n"))
 axis(side=1, at=seq(1:118), label=df$month)
-
 ```
 Figure 4. Detrended Number of Monthly Armed Robberies in Boston
 
@@ -135,7 +133,7 @@ Figure 5. ACF and PACF of detrended data
 
 
 4. Fit the model form the previous step. Include the model, and the parameter estimates. Plot the fitted values and the observed values on the same plot.
-```{r, eval=FALSE}
+```{r}
 # how to know what model to fit? Looking at ACF and PACF? See discussion 7
 # DO NOT USE AUTO.ARIMA() HERE SINCE HE ASKS FOR IT LATER, AND SPECIFIES ARGUMENTS
 
@@ -156,7 +154,7 @@ points(x = 1:117, fit_1$fitted, col = 'darkblue', type = 'l')
 
 
 5. Examine the residuals. Provide necessary plots and/or hypothesis test results. Do the residuals resemble Gaussian white noise?
-```{r, eval=FALSE}
+```{r}
 # residuals
 res = fit_1$residuals
 res
@@ -180,7 +178,7 @@ qqline(res)
 
 
 6. Use AICc to select an ARIMA model for the (possible transformed) data. Keep in mind that differencing should be incorporated into the model. It is fine to use the function auto.arima() here. It is enough to consider p = 0, ..., 8, q = 0, ...,8, and d = 0, 1, 2. Include the chose model, and provide parameter estimates and their standard errors.
-```{r, eval=FALSE}
+```{r}
 fit_2 = auto.arima(robs_log, max.p = 8, max.q = 8, max.P = 2, max.Q = 2, max.d = 2, max.D = 1)
 fit_2
 ```
@@ -188,7 +186,7 @@ fit_2
 
 
 7. Inspect the residuals of this model. Provide necessary plots and/or hypothesis test results. Do the residuals resemble Gaussian white noise?
-```{r, eval=FALSE}
+```{r}
 # residuals
 res = fit_2$residuals
 res
@@ -212,14 +210,14 @@ qqline(res)
 
 
 8. Plot the (theoretical) spectral density of the final model together with the smoothed periodogram. Comment on the plots. Describe the method you chose for smoothing the periodogram.
-```{r, eval=FALSE}
+```{r}
 
 ```
 
 
 
 9. Now remove the data for 1975 (the last 10 observations). Using only data from 1966 - 1975 (the first 108 observations) fit an ARIMA model using AICc. Again it is fine to use auto.arima(). Then do the following.
-```{r, eval=FALSE}
+```{r}
 dim(df)
 
 # taking the first 158 observations.
@@ -229,14 +227,14 @@ subset_fsc = df[109:nrow(df), ]
 
 
 a. Write down the chosen model. Include parameter estimates
-```{r, eval=FALSE}
+```{r}
 fit_3 = auto.arima()
 
 ```
 
 
 b. Inspect the residuals of this model. Do they resemble Gaussian white noise?
-```{r, eval=FALSE}
+```{r}
 # residuals
 res = fit_3$residuals
 res
@@ -259,14 +257,14 @@ qqline(res)
 
 
 c. Compute point forecasts of the values for January through October 1975. If you used a transformation, then be sure to compute forecasts of the original data, not the transmformed data.
-```{r, eval=FALSE}
+```{r}
 fst = predict(fit_3, n.ahead = 10)
 fst$pred
 ```
 
 
 d.Make a time plot of the entire data set, the point forecasts, and 95% prediction intervals. Make another plot of just the observed values from 1975 along with the point forecasts and the prediction intervals. Commnent on the forecast performance.
-```{r, eval=FALSE}
+```{r}
 # CONFIRM THIS CODE
 n = 158
 h = 5
