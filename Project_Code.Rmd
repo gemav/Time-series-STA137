@@ -1,6 +1,6 @@
 ---
 title: "Project"
-author: "Gema Vidal_7526"
+author: "Gema Vidal_7526, Tadaishi Yatabe-Rodriguez_ID_997887941"
 date: "March 6, 2017"
 output: word_document
 ---
@@ -22,11 +22,12 @@ setwd("/Users/gvidal/Box Sync/Vet/MPVM & PhD/PhD 2016_2017 Winter Quarter (gvida
 setwd("/Users/gemavidal/Box Sync/Vet/MPVM & PhD/PhD 2016_2017 Winter Quarter (gvidal@ucdavis.edu)/STA 137/Project")
 
 # from Tada's PC
-# setwd("INSERT YOUR PATH HERE")
+setwd("C:/Users/tyatabe/OneDrive/Docs/PhD Epi/Winter_17/Time series/Project2/Trial")
 
 df <- read.table("bostonArmedRobberies.txt", header = FALSE)
 head(df)
 dim(df)
+colnames(df) <- c("month", "crimes")
 ```
 
 
@@ -34,69 +35,93 @@ dim(df)
 
 1. Use graphical techniques to inspect the data. Describe the behaviour of the data. Mention any features you think may be important for analysis and forecasting.
 ```{r, eval=FALSE}
-plot(df$V2, type = "l", xlab = "Time", ylab = "Number of Armed Robberies", main = "Number of Monthly Armed Robberies in Boston")
+ts.plot(df$crimes, xlab = "Year-month", ylab = "Number of Armed Robberies", gpars=list(xaxt="n"))
+axis(side=1, at=seq(1:118), label=df$month)
 ```
-Variance: unequal variance. During the initial observations, points are closer together compared with how later in time it tends to spread out.
-Trend: increasing trend over time since the number of maximum and minimum number of armed robberies increase over time.
-Seasonality:
+Fig 1. Monthly number of armed roberies in Boston (Jan 1966 - Oct 1975) 
+
+Variance seems to be unequal. During the initial observations, points are closer together compared with how later in time it tends to spread out.
+Data also shows increasing trend over time since the number of maximum and minimum number of armed robberies increase over time.
+The presence of seasonality is not very clear from the plot.
+In summary the data is not stationary as it is clear from the plot that both mean and variance are not constant, being instead a function of time.
 
 
 
-2. In what way(s) is the data not stationary? Use transformations and/or differencing to make the series stationary. Include a time plot of the transformed and/or differenced data. If you chose a transformation, use this transformation for the remainder steps.
+2. In what way(s) is the data not stationary? The data is not stationary in the ways mentioned before.
 
-Making the variance equal
+Use transformations and/or differencing to make the series stationary. Include a time plot of the transformed and/or differenced data. If you chose a transformation, use this transformation for the remainder steps.
+
+
+Transforming data using Box Cox transformation and other methods to make the variance constant.
 ```{r, eval=FALSE}
-robs_sqrt = round(sqrt(df$V2), 2)
-robs_log = round(log(df$V2), 2)
-robs_third = (df$V2)^(1/3)
-robs_subs = (df$V2)^(-1)
+library(forecast)
+lambda <- BoxCox.lambda(df$crimes)
+robs_boxcox <- df$crimes^lambda
+robs_sqrt = round(sqrt(df$crimes), 2)
+robs_log = round(log(df$crimes), 2)
+robs_third = (df$crimes)^(1/3)
+robs_subs = (df$crimes)^(-1)
 
-df_trans = data.frame(robs_sqrt, robs_log, robs_third, robs_subs)
+df_trans = data.frame(robs_sqrt, robs_log, robs_third, robs_subs, robs_boxcox)
 
 # use tada's code that includes the titles of the plots.
-par(mfrow = c(2,1))
+par(mfrow = c(2,3))
 for (d in df_trans) {
-  plot(d, type = "l", xlab = "Time")
+ts.plot(d, xlab = "Year-month", ylab = "Transformed number of Armed Robberies", gpars=list(xaxt="n"))
+axis(side=1, at=seq(1:118), label=df$month)
 }
+
 ```
+Fig 2. Transofmrations of the monthly number of armed roberies in Boston (Jan 1966 - Oct 1975) 
 
+So we'll stick with the Box-Cox transform to stabilize the variance
 
-Removing trend by differencing
+The ACF plot shows a trend, no surprise based on the plot of the raw data.
+The PACF plot shows an exponential decay, with change of sign, indicating that this perhaps is a MA(p) process, although we need to detrend first.
 ```{r}
-ndiffs(robs_log)
-# we have to decide how we want to make the data stationary (transformations? differencing?)
-# BASED ON MY PLOTS WITHOUT LINES, I WOULD GO FOR LOG TRANSFORMATION OR POWER TO THE 1/3
-# BASED ON FUNCTION ndiffs() WE NEED TO DIFFERENCIATE ONCE TO GET STATIONARY DATA
+par(mfrow = c(1,2))
+Acf(robs_boxcox); Pacf(robs_boxcox)
 
-detrend = diff(robs_log, lag = 1, differences = 1)
+```
+Figure 3. ACF and PACF of transformed data
+
+Removing the trend by differencing. Based on the results of ndiffs(), one difference should do
+```{r}
+
+library(forecast)
+ndiffs(robs_boxcox)
+
+detrend = diff(robs_boxcox, lag = 1, differences = 1)
 ndiffs(detrend)
 
-plot(x = 1:117, detrend, type = "l", xlab = "Time", ylab = "Number of Armed Robberies", main = "Detrended Number of Monthly Armed Robberies in Boston")
+ts.plot(detrend, xlab = "Year-month", ylab = " Number of Armed Robberies", gpars=list(xaxt="n"))
+axis(side=1, at=seq(1:118), label=df$month)
 
-Acf(robs_log); Pacf(robs_log)
-Acf(diff(robs_log)); Pacf(diff(robs_log))
 ```
+Figure 4. Detrended Number of Monthly Armed Robberies in Boston
 
 
-Is the data seasonal? Removing seasonality if necessary
+Is the data seasonal? Estimating the number of needed seasonal differences
 ```{r}
 nsdiffs(detrend)
 ```
 Gives an error because the data is non seasonal. We don't need to remove seasonality.
 
 
-
 3. Using the tranformed and/or differenced data from the previous part, obtain the sample ACF and PACF plots, as well as plots of the raw periodogram, and its smoothed version. Comment on the plots. Use the plots to make a preliminary guess for an appropriate ARIMA model. Keep in mind that differencing plays a part in determining whether the model should be ARMA or ARIMA.
 
 
-SAMPLE ACF AND PACF
-```{r, eval=FALSE}
-par(mfrow = c(2, 1))
-Acf(detrend, lag.max = 30)
-Pacf(detrend, lag.max = 30)
+The ACF and PACF plot of the detreneded data look better, we got rid of the trend.Since both ACF and PACF seem to decay exponentially for the differenced series, perhaps this is an ARIMA(p,1,q) process
 
-# BASED ON BOTH ACF AND PACF, LOOKS LIKE THEY DECAY AT SIMILAR RATE, SO I THINK IS AN ARMA(P,Q) PROCESS BUT SINCE IT HAS BEEN DIFFERENCED ONCE, THEN I THINK IS AN ARIMA(P, D, Q) WHERE D = 1.
+```{r}
+par(mfrow = c(1,2))
+Acf(diff(robs_boxcox), lag.max = 30); Pacf(diff(robs_boxcox), lag.max = 30)
 ```
+Figure 5. ACF and PACF of detrended data
+
+
+
+
 
 
 
