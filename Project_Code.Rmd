@@ -9,7 +9,6 @@ Loading packages
 ```{r}
 library("astsa")
 library("forecast")
-library("nlme")
 ```
 
 
@@ -17,7 +16,6 @@ Setting working directory
 ```{r, eval = FALSE}
 # from Gema's PC
 setwd("/Users/gvidal/Box Sync/Vet/MPVM & PhD/PhD 2016_2017 Winter Quarter (gvidal@ucdavis.edu)/STA 137/Project")
-
 # from Gema's Mac
 setwd("/Users/gemavidal/Box Sync/Vet/MPVM & PhD/PhD 2016_2017 Winter Quarter (gvidal@ucdavis.edu)/STA 137/Project")
 
@@ -66,7 +64,6 @@ robs_subs = (df$crimes)^(-1)
 
 df_trans = data.frame(robs_sqrt, robs_log, robs_third, robs_subs, robs_boxcox)
 
-# use tada's code that includes the titles of the plots.
 par(mfrow = c(2,3))
 for (d in df_trans) {
 ts.plot(d, xlab = "Year-month", ylab = "Transformed number of Armed Robberies", gpars=list(xaxt="n"))
@@ -76,7 +73,6 @@ axis(side=1, at=seq(1:118), label=df$month)
 Fig 2. Transformations of the monthly number of armed roberies in Boston (Jan 1966 - Oct 1975) 
 
 So we'll stick with the Box-Cox transform to stabilize the variance
-
 
 ```{r}
 par(mfrow = c(1,2))
@@ -116,100 +112,83 @@ Gives an error because the data is non seasonal. We don't need to remove seasona
 3. Using the tranformed and/or differenced data from the previous part, obtain the sample ACF and PACF plots, as well as plots of the raw periodogram, and its smoothed version. Comment on the plots. Use the plots to make a preliminary guess for an appropriate ARIMA model. Keep in mind that differencing plays a part in determining whether the model should be ARMA or ARIMA.
 
 
-The ACF and PACF plot of the detreneded data look better, we got rid of the trend.Since both ACF and PACF seem to decay exponentially for the differenced series, perhaps this is an ARIMA(p,1,q) process.
-The raw and scaled periodograms have their maximum at frequency 0.359
+The ACF and PACF plot of the detreneded data look better, we got rid of the trend. Since both ACF and PACF seem to decay exponentially for the differenced series, with a large ACF and PACF at lag 1, perhaps this is an ARIMA(1,1,1) process.
+The raw and smoothed periodograms seem to have their largest values at frequencies just below 4.0. The scaled periodogram have its largest values of 0.014, 0.008, and 0.007 at frequencies 0.359, 0.256, and 0.350, respectively. Of these the most salient is the first one, with a value about twice as much as the one of the next 2. Based on the periodogram, where only one value seems to dominate, the balance seems to incline also for the ARIMA(1,1,1) model(?).
 
 ```{r}
 P <- 4*abs(fft(detrend)/length(detrend))^2
-# |---------- Scaled Periodogram -----------|
-
+            #Scaled periodogram^
 Fr <- 0:(length(detrend)-1)/length(detrend)
 
 par(mfrow = c(2,2))
 Acf(detrend, lag.max = 30); Pacf(detrend, lag.max = 30)
-spec.pgram(detrend); plot(Fr, P, type="o", xlab="frequency", ylab="periodogram")
 
-Fr[which.max(P)]
-      # ^ Freq of max periodogram
+spec.pgram(detrend); spec.pgram(detrend, spans = 5)
+# Raw periodogram^    Smoothed periodogram^
 
+plot(Fr, P, type="o", xlab="frequency", ylab="periodogram")
+# Scaled periodogram^
+
+Fr[order(P[1:((length(P)-1)/2)], decreasing = T)[1:3]]
+      # Freq of 3 largest periodograms^
 ```
 Figure 5. ACF and PACF of transformed and detrended data
 
 
 
-
-
-
-
-RAW PERIODOGRAM AND SMOOTHERED PERIODOGRAM
-```{r}
-# raw
-par(mfrow = c(1,1))
-spec.pgram(detrend)
-
-# smoothered (see discussion 9)
-spans = c(3, 5, 9, 13, 17, 25, 31)
-
-
-par(mfrow = c(3,3))
-spec.pgram(detrend)
-for(k in spans){
-spec.pgram(detrend, spans=k, main=paste0('Span ', k))
-}
-```
-Make preliminary guess of appropriate ARIMA / ARMA model would be.
-
-
-
-
 4. Fit the model from the previous step. Include the model, and the parameter estimates. Plot the fitted values and the observed values on the same plot.
 ```{r}
-# how to know what model to fit? Looking at ACF and PACF? See discussion 7
-# DO NOT USE AUTO.ARIMA() HERE SINCE HE ASKS FOR IT LATER, AND SPECIFIES ARGUMENTS
-
 fit_1 = Arima(robs_boxcox, order = c(1, 1, 1))
 fit_1
 ```
-Parameter estimates:
+Parameter estimates: phi = 0.4126; theta = -0.7109. Figure 6 shows the observed and fitted values for this model
 
 
 PLOT FITTED VALUES AND OBSERVED VALUES ON SAME PLOT.
 ```{r}
-plot(df$V2, type = "l")
-points(x = 1:117, fit_1$fitted, col = 'darkblue', type = 'l')
-# IS NOT WORKING, I DON'T KNOW WHY, FITTED POINTS ARE NOT BEING PLOTTED
+ts.plot(df$crimes, xlab = "Year-month", ylab = "Number of Armed Robberies", gpars=list(xaxt="n"))
+axis(side=1, at=seq(1:118), label=df$month)
+points(x = 1:118, fit_1$fitted^(1/lambda), col = 'slateblue', type = 'l')
 ```
-
+Figure 6. Observed (black line) and fitted (blue line) values for thr ARIMA (1,1,1) model of Boston's monthly armed robberies' frequency
 
 
 
 5. Examine the residuals. Provide necessary plots and/or hypothesis test results. Do the residuals resemble Gaussian white noise?
+
+Based on the plot of residuals vs time, the ACF, PACF, Ljung-Box test, and on the histogram and normal Q-Q plot, the residuals look like Gaussian white noise.
+
 ```{r}
 # residuals
 res = fit_1$residuals
-res
-ts.plot(res)
 
 # sample ACF and PACF
-par(mfrow = c(2,1))
-Acf(res)
-Pacf(res)
+par(mfrow = c(2,2))
+ts.plot(res)
+Acf(res, lag=30)
+Pacf(res, lag=30)
 
-# Box-Ljung test (H_0: independence of observations in time series)
-Box.test(res, lag=10, type="Ljung")
+```
+Figure 7. Time plot, ACF, and PACF of residuals
 
+```{r}
 # histogram and normal QQ-plot
-par(mfrow = c(2,1))
+par(mfrow = c(1,2))
 hist(res)
 qqnorm(res)
 qqline(res)
+```
+Figure 8. Histogram and normal Q-Q plot of residuals
+
+```{r}
+# Box-Ljung test (H_0: independence of observations in time series(stationarity)
+Box.test(res, lag=10, type="Ljung")
 ```
 
 
 
 6. Use AICc to select an ARIMA model for the (possible transformed) data. Keep in mind that differencing should be incorporated into the model. It is fine to use the function auto.arima() here. It is enough to consider p = 0, ..., 8, q = 0, ...,8, and d = 0, 1, 2. Include the chose model, and provide parameter estimates and their standard errors.
 ```{r}
-# with lambda = NULL
 fit_2 = auto.arima(robs_boxcox, max.p = 8, max.q = 8, max.P = 2, max.Q = 2, max.d = 2, max.D = 1, ic = "aicc", trace = TRUE)
 fit_2
 ```
@@ -217,8 +196,6 @@ The best model is an ARIMA(0,1,2) with drift with AICc = 0.37, where the estimat
 theta_1: -0.3630 (s.e.: 0.0952)
 theta_2: -0.3114 (s.e.: 0.1199)
 drift (mu): 0.0245 (s.e.: 0.0072)
-
-
 
 
 
@@ -253,10 +230,38 @@ Furthermore, the histogram and normal plots show that the residuals of our fitte
 Our final best model is ARIMA(0,1,2) since its AICc is lower (0.37) compared with ARIMA(1,1,1)'s AICc (4.45). Therefore, we are going to use this model in the remainding parts of this project.
 
 
+
 8. Plot the (theoretical) spectral density of the final model together with the smoothed periodogram. Comment on the plots. Describe the method you chose for smoothing the periodogram.
-```{r}
+
+```{r, eval=FALSE}
+# Using simulate from forecast package. fit_kk is place-holder for auto.rima ourput
+x1 <- simulate(fit_kk, seed=1, future=F)
+
+# Using auto.arima. No place for the drift here (it shouldn't matter though(?))
+set.seed(1)
+x2 <- arima.sim(n=118, model=list(ma=c(-0.3630, -0.3114), order=c(0,1,2)))
+
+# Differencing simulated data
+x2.diff <- diff(x2, lag = 1, differences = 1)
+ndiffs(x2.diff)
+
+# Spectral density
+P.x <- 4*abs(fft(x2.diff)/length(x2.diff))^2
+            #Scaled periodogram^
+Fr.x <- 0:(length(x2.diff)-1)/length(x2.diff)
+
+# Plotting
+par(mfrow=c(2,2))
+spec.pgram(x2.diff); spec.pgram(x2.diff, spans = 5)
+# Raw periodogram^    Smoothed periodogram^
+
+plot(Fr.x, P.x, type="o", xlab="frequency", ylab="periodogram")
+
+# Dominating frequencies
+Fr.x[order(P.x[1:((length(P.x)-1)/2)], decreasing = T)[1:3]]
 
 ```
+Figure 11. Raw, smoothed, and scaled periodograms of a simulated ARIMA(0,1,2) time series
 
 
 
@@ -318,7 +323,6 @@ The plot of the residuals doesn't show any particular pattern. Also, the ACF and
 This is supported by the Ljung-Box test, which null hypothesis is that the observations in a time series process are independent. Our residuals, after fitting an ARIMA(0,1,2) model considering only the first 108 observations, has a p-value of 0.5295 and therefore, we cannot reject the null with a significance level of 0.05.
 
 Furthermore, the histogram and normal plots show that the residuals of our fitted model have a Gaussian white noise distribution.
-
 
 
 
