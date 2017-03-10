@@ -1,0 +1,341 @@
+---
+title: "Project"
+author: "Gema Vidal_7526, Tadaishi Yatabe-Rodriguez_ID_997887941"
+date: "March 6, 2017"
+output: word_document
+---
+
+Loading packages
+```{r, eval = FALSE}
+library("astsa")
+library("forecast")
+```
+
+
+Setting working directory
+```{r, eval = FALSE}
+# from Gema's PC
+#setwd("/Users/gvidal/Box Sync/Vet/MPVM & PhD/PhD 2016_2017 Winter Quarter (gvidal@ucdavis.edu)/STA 137/Project")
+# from Gema's Mac
+setwd("/Users/gemavidal/Box Sync/Vet/MPVM & PhD/PhD 2016_2017 Winter Quarter (gvidal@ucdavis.edu)/STA 137/Project")
+
+# from Tada's PC
+#setwd("C:/Users/tyatabe/OneDrive/Docs/PhD Epi/Winter_17/Time series/Project2/Trial")
+# From Tada's laptop
+#setwd("C:/Users/Tadaishi/SkyDrive//Docs/PhD Epi/Winter_17/Time series/Project2/Trial")
+
+df <- read.table("bostonArmedRobberies.txt", header = FALSE)
+head(df)
+dim(df)
+colnames(df) <- c("month", "crimes")
+```
+
+
+
+
+1. Use graphical techniques to inspect the data. Describe the behaviour of the data. Mention any features you think may be important for analysis and forecasting.
+
+```{r, eval = FALSE}
+ts.plot(df$crimes, xlab = "Year-month", ylab = "Number of Armed Robberies", gpars=list(xaxt="n"))
+axis(side=1, at=seq(1:118), label=df$month)
+```
+Fig 1. Monthly number of armed roberies in Boston (Jan 1966 - Oct 1975) 
+
+Variance seems to be unequal. During the initial observations, points are closer together compared with how later in time it tends to spread out.
+Data also shows increasing trend over time since the number of maximum and minimum number of armed robberies increase over time.
+The presence of seasonality is not very clear from the plot.
+In summary the data is not stationary as it is clear from the plot that both mean and variance are not constant, being instead a function of time.
+
+
+
+2. In what way(s) is the data not stationary? The data is not stationary in the ways mentioned before.
+
+Use transformations and/or differencing to make the series stationary. Include a time plot of the transformed and/or differenced data. If you chose a transformation, use this transformation for the remainder steps.
+
+
+Transforming data using Box Cox transformation and other methods to make the variance constant.
+```{r, eval = FALSE}
+lambda <- BoxCox.lambda(df$crimes)
+robs_boxcox <- df$crimes^lambda
+robs_sqrt = round(sqrt(df$crimes), 2)
+robs_log = round(log(df$crimes), 2)
+robs_third = (df$crimes)^(1/3)
+robs_subs = (df$crimes)^(-1)
+
+df_trans = data.frame(robs_sqrt, robs_log, robs_third, robs_subs, robs_boxcox)
+
+par(mfrow = c(3,2))
+for (d in df_trans) {
+ts.plot(d, xlab = "Year-month", ylab = "Transformed no. Robberies", gpars=list(xaxt="n"))
+axis(side=1, at=seq(1:118), label=df$month)
+}
+```
+Fig 2. Transofmrations of the monthly number of armed roberies in Boston (Jan 1966 - Oct 1975) 
+
+So we'll stick with the Box-Cox transform to stabilize the variance
+
+The ACF plot shows a trend, no surprise based on the plot of the raw data.
+The PACF plot shows an exponential decay, with change of sign, indicating that this, perhaps, is a MA(p) process, although we need to detrend first.
+```{r, eval = FALSE}
+par(mfrow = c(2,1))
+Acf(robs_boxcox, main = ""); Pacf(robs_boxcox, main = "")
+```
+Figure 3. ACF and PACF of transformed data
+
+Removing the trend by differencing. Based on the results of ndiffs(), one difference should do. Figure 4 shows the transformed differenced data looks roughly stationary.
+```{r, eval = FALSE}
+ndiffs(robs_boxcox)
+
+detrend = diff(robs_boxcox, lag = 1, differences = 1)
+ndiffs(detrend)
+
+ts.plot(detrend, xlab = "Year-month", ylab = " Number of Armed Robberies", gpars=list(xaxt="n"))
+axis(side=1, at=seq(1:118), label=df$month)
+```
+Figure 4. Detrended Number of Monthly Armed Robberies in Boston
+
+
+Is the data seasonal? Estimating the number of needed seasonal differences
+```{r, eval = FALSE}
+#nsdiffs(detrend)
+```
+Gives an error because the data is non seasonal. We don't need to remove seasonality.
+
+
+3. Using the tranformed and/or differenced data from the previous part, obtain the sample ACF and PACF plots, as well as plots of the raw periodogram, and its smoothed version. Comment on the plots. Use the plots to make a preliminary guess for an appropriate ARIMA model. Keep in mind that differencing plays a part in determining whether the model should be ARMA or ARIMA.
+
+
+The ACF and PACF plot of the detreneded data look better, we got rid of the trend. Both ACF and PACF don't show us any clear sign of the underlying process. Perhaps this is an ARIMA (1,1,1) process.
+The raw and smoothed periodograms seem to have their peak values (excluding the peak at around frequency 0.5) at frequencies around 4.0 and around 3.0. Based on this, the model could be a MA(2) model. We'll stick with this
+
+```{r, eval = FALSE}
+n = length(detrend)
+m = floor(n/2)
+# get the raw periodogram values at the Fourier frequencies
+pgrm.raw = spec.pgram(detrend, plot=F,log='no')$spec
+
+# vector of candidate L values for smoothing
+spans = (1:(m-1))*2+1
+# vector to store criterion values for each L
+Q = numeric(length(spans))
+
+# go through the L values and compute Q for each
+for(j in 1:length(spans)){
+  L = spans[j]
+  pgrm.smooth = spec.pgram(detrend, spans=L,log='no', plot=F)$spec
+  Q[j] = sum((pgrm.smooth - pgrm.raw) ^ 2) + sum((pgrm.raw)^2)/(L-1)
+}
+# plot the values
+plot(x=spans, y=Q, type='b')
+# figure out which L is best
+L = spans[which.min(Q)]; L
+
+# Plot
+par(mfrow=c(2,2))
+Acf(detrend, lag.max = 30, main = ""); Pacf(detrend, lag.max = 30, main = "")
+spec.pgram(detrend, log='no', main = ""); spec.pgram(detrend, spans=L, log='no', main = "")
+```
+Figure 5. ACF and PACF of detrended data
+
+
+
+4. Fit the model form the previous step. Include the model, and the parameter estimates. Plot the fitted values and the observed values on the same plot.
+
+```{r, eval = FALSE}
+fit_1 = Arima(robs_boxcox, order = c(0, 1, 2))
+fit_1
+```
+Parameter estimates: theta1 = -0.2796; theta = -0.1911. Figure 6 shows the observed and fitted values for this model
+
+```{r, eval = FALSE}
+ts.plot(df$crimes, xlab = "Year-month", ylab = "Number of Armed Robberies", gpars=list(xaxt="n"))
+axis(side=1, at=seq(1:118), label=df$month)
+points(x = 1:118, fit_1$fitted^(1/lambda), col = 'slateblue', type = 'l')
+```
+Figure 6. Observed (black line) and fitted (blue line) values for thr ARIMA (1,1,1) model of Boston's monthly armed robberies' frequency
+
+
+
+5. Examine the residuals. Provide necessary plots and/or hypothesis test results. Do the residuals resemble Gaussian white noise?
+
+Based on the plot of residuals vs time, the ACF, PACF, Ljung-Box test, and on the histogram and normal Q-Q plot, the residuals look like Gaussian white noise.
+
+```{r, eval = FALSE}
+# residuals
+res = fit_1$residuals
+
+# sample ACF and PACF
+par(mfrow = c(3,1))
+ts.plot(res)
+Acf(res, lag=30, main = "")
+Pacf(res, lag=30, main = "")
+```
+Figure 7. Time plot, ACF, and PACF of residuals
+
+```{r, eval = FALSE}
+# histogram and normal QQ-plot
+par(mfrow = c(1,2))
+hist(res, xlab = "residuals", main = "")
+qqnorm(res, main = "")
+qqline(res)
+```
+Figure 8. Histogram and normal Q-Q plot of residuals
+
+```{r, eval = FALSE}
+# Box-Ljung test (H_0: independence of observations in time series(stationarity)
+Box.test(res, lag=10, type="Ljung")
+```
+
+
+
+6. Use AICc to select an ARIMA model for the (possible transformed) data. Keep in mind that differencing should be incorporated into the model. It is fine to use the function auto.arima() here. It is enough to consider p = 0, ..., 8, q = 0, ...,8, and d = 0, 1, 2. Include the chose model, and provide parameter estimates and their standard errors.
+```{r, eval = FALSE}
+fit_2 = auto.arima(robs_boxcox, max.p = 8, max.q = 8, max.P = 0, max.Q = 0, max.d = 2, max.D = 0, ic = "aicc", trace = TRUE)
+fit_2
+```
+The best model is an ARIMA(0,1,2) with drift with AICc = 0.37, where the estimated parameters are:
+theta_1: -0.3630 (s.e.: 0.0952)
+theta_2: -0.3114 (s.e.: 0.1199)
+drift (mu): 0.0245 (s.e.: 0.0072)
+
+
+
+7. Inspect the residuals of this model. Provide necessary plots and/or hypothesis test results. Do the residuals resemble Gaussian white noise?
+```{r, eval = FALSE}
+# residuals
+par(mfrow = c(1,1))
+res = fit_2$residuals
+res
+
+par(mfrow = c(3,1))
+ts.plot(res)
+Acf(res, lag=30, main = "")
+Pacf(res, lag=30, main = "")
+
+# Box-Ljung test (H_0: independence of observations in time series)
+Box.test(res, lag=10, type="Ljung")
+
+# histogram and normal QQ-plot
+par(mfrow = c(1,2))
+hist(res, xlab = "residuals", main = "")
+qqnorm(res, main = "")
+qqline(res)
+```
+The plot of the residuals doesn't show any particular pattern. Also, the ACF and PACF plots show that 95% of the values are inside the 95% CI, indicating that the residuals resemble Gaussian white noise. 
+This is supported by the Ljung-Box test, which null hypothesis is that the observations in a time series process are independent. Our residuals, after fitting an ARIMA(0,1,2) model, has a p-value of 0.1512 and therefore, we cannot reject the null with a significance level of 0.05.
+
+Furthermore, the histogram and normal plots show that the residuals of our fitted model have a Gaussian white noise distribution.
+
+
+Our final best model is ARIMA(0,1,2) since its AICc is lower (0.37) compared with ARIMA(1,1,1)'s AICc (4.45). Therefore, we are going to use this model in the remainding parts of this project.
+
+
+
+8. Plot the (theoretical) spectral density of the final model together with the smoothed periodogram. Comment on the plots. Describe the method you chose for smoothing the periodogram.
+
+The smoothed periodogram looks very close to the theoretical one, indicating that the MA(2) process is a good candidate for the data originating process.
+The method for choosing the smoothing span (for the modified Daniell kernel smoothing), L, was based on minimizing the distance between the smoothed and raw periodogram estimates, Q.
+
+```{r, eval = FALSE}
+# Plotting
+par(mfrow=c(2,1))
+arma.spec(ma=c(c(-0.3630, -0.3114)), main = ""); spec.pgram(detrend, spans = L, log="no", main = "")
+```
+Figure 11. Theoretical (MA(-0.3630, -0.3114)) and observed smoothed periodograms for the crimes data.
+
+
+
+
+9. Now remove the data for 1975 (the last 10 observations). Using only data from 1966 - 1975 (the first 108 observations) fit an ARIMA model using AICc. Again it is fine to use auto.arima(). Then do the following.
+```{r, eval = FALSE}
+length(robs_boxcox)
+
+# taking the first 108 observations of the transformed data.
+subset_robs = robs_boxcox[1:108]
+subset_fsc = robs_boxcox[109:length(robs_boxcox)]
+
+# taking the first 108 observations of the original data.
+subs_robs_original = df[1:108, ]
+subs_fsc_original = df[109:nrow(df), ]
+```
+
+
+a. Write down the chosen model. Include parameter estimates
+```{r, eval = FALSE}
+# for the transformed subset data
+fit_3 = auto.arima(subset_robs, max.p = 8, max.q = 8, max.d = 2, ic = "aicc", trace = TRUE)
+fit_3
+```
+The best model based on the first 108 observations, is an ARIMA(0,1,2) with drift and with AICc = 1.05, where the parameters are:
+theta_1: -0.3818 (s.e.: 0.0970)
+theta_2: -0.2852 (s.e.: 0.1141)
+drift (mu): 0.0265 (s.e.: 0.0077)
+
+
+
+b. Inspect the residuals of this model. Do they resemble Gaussian white noise?
+```{r, eval = FALSE}
+# residuals
+par(mfrow = c(1,1))
+res = fit_3$residuals
+res
+
+par(mfrow = c(3,1))
+ts.plot(res)
+Acf(res, lag=30, main = "")
+Pacf(res, lag=30, main = "")
+
+# Box-Ljung test (H_0: independence of observations in time series)
+Box.test(res, lag=10, type="Ljung")
+
+# histogram and normal QQ-plot
+par(mfrow = c(1,2))
+hist(res, xlab = "residuals", main = "")
+qqnorm(res, main = "")
+qqline(res)
+```
+The plot of the residuals doesn't show any particular pattern. Also, the ACF and PACF plots show that all the values at different lags are inside the 95% CI, indicating that the residuals resemble Gaussian white noise.
+
+This is supported by the Ljung-Box test, which null hypothesis is that the observations in a time series process are independent. Our residuals, after fitting an ARIMA(0,1,2) model considering only the first 108 observations, has a p-value of 0.5295 and therefore, we cannot reject the null with a significance level of 0.05.
+
+Furthermore, the histogram and normal plots show that the residuals of our fitted model have a Gaussian white noise distribution.
+
+
+
+c. Compute point forecasts of the values for January through October 1975. If you used a transformation, then be sure to compute forecasts of the original data, not the transformed data.
+```{r, eval = FALSE}
+fst = forecast(fit_3, h = 10, level = 95)
+fst
+
+points_fst = fst$mean^(1/lambda); points_fst
+lower = fst$lower^(1/lambda); lower
+upper = fst$upper^(1/lambda); upper
+```
+With the function forecast(), we computed the point forecasts with their respective upper and lower bouds for the 95% CI. After that, the estimated point forecasts and their upper and lower bounds are transformed back the original scale.
+
+
+
+d. Make a time plot of the entire data set, the point forecasts, and 95% prediction intervals. Make another plot of just the observed values from 1975 along with the point forecasts and the prediction intervals. Comment on the forecast performance.
+
+
+Plot of entire data set, point forecasts and 95% prediction intervals
+```{r, eval = FALSE}
+n = 108
+h = 10
+
+par(mfrow = c(1,1))
+ts.plot(df$crimes, ylab = "number of crimes", main = "")
+polygon(x = c(n+(1:h), n+(h:1)), y = c(upper, lower[h:1]), col = 'lightblue', border = NA)
+points(x = n+1:h, y = points_fst, col = 'purple', type = 'b', pch = 19)
+points(x = n+1:h, y = subs_fsc_original$crimes, col = 'black', type = 'l')
+```
+
+
+Plot of just the observed values from 1975, point forecasts and prediction intervals.
+```{r, eval = FALSE}
+ts.plot(subs_fsc_original$crimes, ylab = "Number of Robberies",main = "", ylim = c(250, 700))
+polygon(x = c(seq(1,10), seq(10,1)), y = c(upper, lower[h:1]), col = 'lightblue', border = NA)
+points(seq(1,10), points_fst, col = 'purple', type = 'b', pch = 19)
+points(seq(1,10), y = subs_fsc_original$crimes, col = 'black', type = 'l')
+```
+COMMENT ON THE FORECAST PERFORMANCE:
