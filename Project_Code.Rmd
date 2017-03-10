@@ -34,17 +34,17 @@ colnames(df) <- c("month", "crimes")
 
 
 1. Use graphical techniques to inspect the data. Describe the behaviour of the data. Mention any features you think may be important for analysis and forecasting.
-```{r}
-par(mfrow = c(1,1))
-ts.plot(df$crimes, xlab = "Year-month", ylab = "Number of Armed Robberies", gpars=list(xaxt="n"), main = "Number of Armed Robberies over Time in Boston")
+
+```{r, eval=T}
+ts.plot(df$crimes, xlab = "Year-month", ylab = "Number of Armed Robberies", gpars=list(xaxt="n"))
 axis(side=1, at=seq(1:118), label=df$month)
 ```
 Fig 1. Monthly number of armed roberies in Boston (Jan 1966 - Oct 1975) 
 
 Variance seems to be unequal. During the initial observations, points are closer together compared with how later in time it tends to spread out.
-Data also shows increasing trend over time since the number of maximum and minimum number of armed robberies increases over time.
+Data also shows increasing trend over time since the number of maximum and minimum number of armed robberies increase over time.
 The presence of seasonality is not very clear from the plot.
-In summary, the data is not stationary as it is clear from the plot that both mean and variance are not constant, being instead a function of time.
+In summary the data is not stationary as it is clear from the plot that both mean and variance are not constant, being instead a function of time.
 
 
 
@@ -55,6 +55,7 @@ Use transformations and/or differencing to make the series stationary. Include a
 
 Transforming data using Box Cox transformation and other methods to make the variance constant.
 ```{r}
+
 lambda <- BoxCox.lambda(df$crimes)
 robs_boxcox <- df$crimes^lambda
 robs_sqrt = round(sqrt(df$crimes), 2)
@@ -64,42 +65,37 @@ robs_subs = (df$crimes)^(-1)
 
 df_trans = data.frame(robs_sqrt, robs_log, robs_third, robs_subs, robs_boxcox)
 
+# use tada's code that includes the titles of the plots.Check code discussion 9 for main text
 par(mfrow = c(2,3))
 for (d in df_trans) {
 ts.plot(d, xlab = "Year-month", ylab = "Transformed number of Armed Robberies", gpars=list(xaxt="n"))
 axis(side=1, at=seq(1:118), label=df$month)
 }
+
 ```
-Fig 2. Transformations of the monthly number of armed roberies in Boston (Jan 1966 - Oct 1975) 
+Fig 2. Transofmrations of the monthly number of armed roberies in Boston (Jan 1966 - Oct 1975) 
 
 So we'll stick with the Box-Cox transform to stabilize the variance
 
+The ACF plot shows a trend, no surprise based on the plot of the raw data.
+The PACF plot shows an exponential decay, with change of sign, indicating that this, perhaps, is a MA(p) process, although we need to detrend first.
 ```{r}
 par(mfrow = c(1,2))
 Acf(robs_boxcox); Pacf(robs_boxcox)
 ```
 Figure 3. ACF and PACF of transformed data
 
-The ACF plot shows a trend, no surprise based on the plot of the raw data.
-The PACF plot shows an exponential decay, with change of sign, indicating that this, perhaps, is a MA(p) process, although we need to detrend first.
-
-
-
-Removing the trend by differencing. Based on the results of ndiffs(), one difference should do.
+Removing the trend by differencing. Based on the results of ndiffs(), one difference should do. Figure 4 shows the transformed differenced data looks roughly stationary.
 ```{r}
 ndiffs(robs_boxcox)
 
 detrend = diff(robs_boxcox, lag = 1, differences = 1)
 ndiffs(detrend)
 
-
-par(mfrow = c(1,1))
-ts.plot(detrend, xlab = "Year-month", ylab = " Number of Armed Robberies", gpars=list(xaxt="n"), main = "Detrended Number of Armed Robberies in Boston")
+ts.plot(detrend, xlab = "Year-month", ylab = " Number of Armed Robberies", gpars=list(xaxt="n"))
 axis(side=1, at=seq(1:118), label=df$month)
 ```
 Figure 4. Detrended Number of Monthly Armed Robberies in Boston
-
-Figure 4 shows the transformed differenced data looks roughly stationary.
 
 
 Is the data seasonal? Estimating the number of needed seasonal differences
@@ -112,43 +108,57 @@ Gives an error because the data is non seasonal. We don't need to remove seasona
 3. Using the tranformed and/or differenced data from the previous part, obtain the sample ACF and PACF plots, as well as plots of the raw periodogram, and its smoothed version. Comment on the plots. Use the plots to make a preliminary guess for an appropriate ARIMA model. Keep in mind that differencing plays a part in determining whether the model should be ARMA or ARIMA.
 
 
-The ACF and PACF plot of the detreneded data look better, we got rid of the trend. Since both ACF and PACF seem to decay exponentially for the differenced series, with a large ACF and PACF at lag 1, perhaps this is an ARIMA(1,1,1) process.
-The raw and smoothed periodograms seem to have their largest values at frequencies just below 4.0. The scaled periodogram have its largest values of 0.014, 0.008, and 0.007 at frequencies 0.359, 0.256, and 0.350, respectively. Of these the most salient is the first one, with a value about twice as much as the one of the next 2. Based on the periodogram, where only one value seems to dominate, the balance seems to incline also for the ARIMA(1,1,1) model(?).
+The ACF and PACF plot of the detreneded data look better, we got rid of the trend. Both ACF and PACF don't show us any clear sign of the underlying process. Perhaps this is an ARIMA (1,1,1) process.
+The raw and smoothed periodograms seem to have their peak values (excluding the peak at around frequency 0.5) at frequencies around 4.0 and around 3.0. Based on this, the model could be a MA(2) model. We'll stick with this
 
 ```{r}
-P <- 4*abs(fft(detrend)/length(detrend))^2
-            #Scaled periodogram^
-Fr <- 0:(length(detrend)-1)/length(detrend)
 
-par(mfrow = c(2,2))
+n = length(detrend)
+m = floor(n/2)
+# get the raw periodogram values at the Fourier frequencies
+pgrm.raw = spec.pgram(detrend, plot=F,log='no')$spec
+
+# vector of candidate L values for smoothing
+spans = (1:(m-1))*2+1
+# vector to store criterion values for each L
+Q = numeric(length(spans))
+
+# go through the L values and compute Q for each
+for(j in 1:length(spans)){
+  L = spans[j]
+  pgrm.smooth = spec.pgram(detrend, spans=L,log='no', plot=F)$spec
+  Q[j] = sum((pgrm.smooth - pgrm.raw) ^ 2) + sum((pgrm.raw)^2)/(L-1)
+}
+# plot the values
+plot(x=spans, y=Q, type='b')
+# figure out which L is best
+L = spans[which.min(Q)]; L
+
+# Plot
+par(mfrow=c(2,2))
 Acf(detrend, lag.max = 30); Pacf(detrend, lag.max = 30)
+spec.pgram(detrend, log='no'); spec.pgram(detrend, spans=L, log='no')
 
-spec.pgram(detrend); spec.pgram(detrend, spans = 5)
-# Raw periodogram^    Smoothed periodogram^
 
-plot(Fr, P, type="o", xlab="frequency", ylab="periodogram")
-# Scaled periodogram^
-
-Fr[order(P[1:((length(P)-1)/2)], decreasing = T)[1:3]]
-      # Freq of 3 largest periodograms^
 ```
-Figure 5. ACF and PACF of transformed and detrended data
+Figure 5. ACF and PACF of detrended data
 
 
 
-4. Fit the model from the previous step. Include the model, and the parameter estimates. Plot the fitted values and the observed values on the same plot.
+4. Fit the model form the previous step. Include the model, and the parameter estimates. Plot the fitted values and the observed values on the same plot.
+
 ```{r}
-fit_1 = Arima(robs_boxcox, order = c(1, 1, 1))
+
+fit_1 = Arima(robs_boxcox, order = c(0, 1, 2))
 fit_1
 ```
-Parameter estimates: phi = 0.4126; theta = -0.7109. Figure 6 shows the observed and fitted values for this model
+Parameter estimates: theta1 = -0.2796; theta = -0.1911. Figure 6 shows the observed and fitted values for this model
 
-
-PLOT FITTED VALUES AND OBSERVED VALUES ON SAME PLOT.
 ```{r}
 ts.plot(df$crimes, xlab = "Year-month", ylab = "Number of Armed Robberies", gpars=list(xaxt="n"))
 axis(side=1, at=seq(1:118), label=df$month)
 points(x = 1:118, fit_1$fitted^(1/lambda), col = 'slateblue', type = 'l')
+
 ```
 Figure 6. Observed (black line) and fitted (blue line) values for thr ARIMA (1,1,1) model of Boston's monthly armed robberies' frequency
 
@@ -189,7 +199,7 @@ Box.test(res, lag=10, type="Ljung")
 
 6. Use AICc to select an ARIMA model for the (possible transformed) data. Keep in mind that differencing should be incorporated into the model. It is fine to use the function auto.arima() here. It is enough to consider p = 0, ..., 8, q = 0, ...,8, and d = 0, 1, 2. Include the chose model, and provide parameter estimates and their standard errors.
 ```{r}
-fit_2 = auto.arima(robs_boxcox, max.p = 8, max.q = 8, max.P = 2, max.Q = 2, max.d = 2, max.D = 1, ic = "aicc", trace = TRUE)
+fit_2 = auto.arima(robs_boxcox, max.p = 8, max.q = 8, max.P = 0, max.Q = 0, max.d = 2, max.D = 0, ic = "aicc", trace = TRUE)
 fit_2
 ```
 The best model is an ARIMA(0,1,2) with drift with AICc = 0.37, where the estimated parameters are:
@@ -233,35 +243,18 @@ Our final best model is ARIMA(0,1,2) since its AICc is lower (0.37) compared wit
 
 8. Plot the (theoretical) spectral density of the final model together with the smoothed periodogram. Comment on the plots. Describe the method you chose for smoothing the periodogram.
 
+The smoothed periodogram looks very close to the theoretical one, indicating that the MA(2) process is a good candidate for the data originating process.
+The method for choosing the smoothing span (for the modified Daniell kernel smoothing), L, was based on minimizing the distance between the smoothed and raw periodogram estimates, Q.
+
 ```{r, eval=FALSE}
-# Using simulate from forecast package. fit_kk is place-holder for auto.rima ourput
-x1 <- simulate(fit_kk, seed=1, future=F)
-
-# Using auto.arima. No place for the drift here (it shouldn't matter though(?))
-set.seed(1)
-x2 <- arima.sim(n=118, model=list(ma=c(-0.3630, -0.3114), order=c(0,1,2)))
-
-# Differencing simulated data
-x2.diff <- diff(x2, lag = 1, differences = 1)
-ndiffs(x2.diff)
-
-# Spectral density
-P.x <- 4*abs(fft(x2.diff)/length(x2.diff))^2
-            #Scaled periodogram^
-Fr.x <- 0:(length(x2.diff)-1)/length(x2.diff)
-
 # Plotting
-par(mfrow=c(2,2))
-spec.pgram(x2.diff); spec.pgram(x2.diff, spans = 5)
-# Raw periodogram^    Smoothed periodogram^
+par(mfrow=c(2,1))
+arma.spec(ma=c(c(-0.3630, -0.3114))); spec.pgram(detrend, spans = L, log="no")
 
-plot(Fr.x, P.x, type="o", xlab="frequency", ylab="periodogram")
-
-# Dominating frequencies
-Fr.x[order(P.x[1:((length(P.x)-1)/2)], decreasing = T)[1:3]]
 
 ```
-Figure 11. Raw, smoothed, and scaled periodograms of a simulated ARIMA(0,1,2) time series
+Figure 11. Theoretical (MA(-0.3630, -0.3114)) and observed smoothed periodograms for the crimes data.
+
 
 
 
